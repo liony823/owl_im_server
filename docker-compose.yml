@@ -1,0 +1,194 @@
+version: "3"
+
+networks:
+  openim:
+    driver: bridge
+
+services:
+  mongodb:
+    image: "${MONGO_IMAGE}"
+    ports:
+      - "37017:27017"
+    container_name: mongo
+    command:
+      [
+        "/bin/bash",
+        "-c",
+        "/docker-entrypoint-initdb.d/mongo-init.sh; docker-entrypoint.sh mongod --wiredTigerCacheSizeGB 1 --auth --replSet rs0 --keyFile /data/configdb/mongodb.key",
+      ]
+    volumes:
+      - "./mongodb.key:/data/configdb/mongodb.key"
+      - "${DATA_DIR}/components/mongodb/data/db:/data/db"
+      - "${DATA_DIR}/components/mongodb/data/logs:/data/logs"
+      - "${DATA_DIR}/components/mongodb/data/conf:/etc/mongo"
+      - "./scripts/mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro"
+    environment:
+      - TZ=Asia/Shanghai
+      - wiredTigerCacheSizeGB=1
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=owlIM123
+      - MONGO_INITDB_DATABASE=owlim_v1
+      - MONGO_OPENIM_USERNAME=owlIM
+      - MONGO_OPENIM_PASSWORD=owlIM123
+      - MONGO_VERSION=1
+    restart: always
+    networks:
+      - openim
+
+  redis:
+    image: "${REDIS_IMAGE}"
+    container_name: redis
+    ports:
+      - "16379:6379"
+    volumes:
+      - "${DATA_DIR}/components/redis/data:/data"
+      - "${DATA_DIR}/components/redis/config/redis.conf:/usr/local/redis/config/redis.conf"
+    environment:
+      TZ: Asia/Shanghai
+    restart: always
+    sysctls:
+      net.core.somaxconn: 1024
+    command: redis-server /usr/local/redis/config/redis.conf --requirepass owlIM123 --appendonly yes
+    networks:
+      - openim
+
+  zookeeper:
+    image: "${ZOOKEEPER_IMAGE}"
+    container_name: zookeeper
+    ports:
+      - "12181:2181"
+    environment:
+      #JVMFLAGS: "-Xms32m -Xmx128m"
+      TZ: "Asia/Shanghai"
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    restart: always
+    networks:
+      - openim
+
+  etcd:
+    image: "${ETCD_IMAGE}"
+    container_name: etcd
+    ports:
+      - "12379:2379"
+      - "12380:2380"
+    environment:
+      - ETCD_NAME=s1
+      - ETCD_DATA_DIR=/etcd-data
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_CLUSTER=s1=http://0.0.0.0:2380
+      - ETCD_INITIAL_CLUSTER_TOKEN=tkn
+      - ETCD_INITIAL_CLUSTER_STATE=new
+    restart: always
+    networks:
+      - openim
+
+  kafka:
+    image: "${KAFKA_IMAGE}"
+    container_name: kafka
+    user: root
+    restart: always
+    ports:
+      - "19094:9094"
+    volumes:
+      - ./scripts/create-topic.sh:/opt/bitnami/kafka/create-topic.sh
+      - "${DATA_DIR}/components/kafka:/bitnami/kafka"
+    command: >
+      bash -c "/opt/bitnami/scripts/kafka/run.sh & /opt/bitnami/kafka/create-topic.sh; wait"
+    environment:
+      #KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+      TZ: Asia/Shanghai
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:19094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+    networks:
+      - openim
+
+  minio:
+    image: "${MINIO_IMAGE}"
+    ports:
+      - "10005:9000"
+      - "19090:9090"
+    container_name: minio
+    volumes:
+      - "${DATA_DIR}/components/mnt/data:/data"
+      - "${DATA_DIR}/components/mnt/config:/root/.minio"
+    environment:
+      TZ: Asia/Shanghai
+      MINIO_ROOT_USER: root
+      MINIO_ROOT_PASSWORD: owlIM123
+    restart: always
+    command: minio server /data --console-address ':9090'
+    networks:
+      - openim
+
+  openim-web-front:
+    image: ${OPENIM_WEB_FRONT_IMAGE}
+    container_name: openim-web-front
+    restart: always
+    ports:
+      - "11001:80"
+    networks:
+      - openim
+
+  openim-admin-front:
+    image: ${OPENIM_ADMIN_FRONT_IMAGE}
+    container_name: openim-admin-front
+    restart: always
+    ports:
+      - "11002:80"
+    networks:
+      - openim
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    container_name: prometheus
+    restart: always
+    user: root
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./config/instance-down-rules.yml:/etc/prometheus/instance-down-rules.yml
+      - ${DATA_DIR}/components/prometheus/data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "19091:9090"
+    networks:
+      - openim
+
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE}
+    container_name: alertmanager
+    restart: always
+    volumes:
+      - ./config/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./config/email.tmpl:/etc/alertmanager/email.tmpl
+    ports:
+      - "19093:9093"
+    networks:
+      - openim
+
+  grafana:
+    image: ${GRAFANA_IMAGE}
+    container_name: grafana
+    user: root
+    restart: always
+    environment:
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SESSION_COOKIE_SAMESITE=none
+      - GF_SESSION_COOKIE_SECURE=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    ports:
+      - "13000:3000"
+    volumes:
+      - ${DATA_DIR:-./}/components/grafana:/var/lib/grafana
+    networks:
+      - openim

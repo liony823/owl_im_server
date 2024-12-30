@@ -1,0 +1,14 @@
+# URI for database connection, leave empty if using address and credential settings directly
+uri: 'mongodb://owlIM:owlIM123@localhost:37017/owlim_v1?authSource=owlim_v1&directConnection=true'
+# List of MongoDB server addresses
+address: [ localhost:37017 ]
+# Name of the database
+database: owlim_v1
+# Username for database authentication
+username: owlIM
+# Password for database authentication
+password: owlIM123
+# Maximum number of connections in the connection pool
+maxPoolSize: 100
+# Maximum number of retry attempts for a failed database connection
+maxRetry: 10
