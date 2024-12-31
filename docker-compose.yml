@@ -128,23 +128,23 @@ services:
     networks:
       - openim
 
-  openim-web-front:
-    image: ${OPENIM_WEB_FRONT_IMAGE}
-    container_name: openim-web-front
-    restart: always
-    ports:
-      - "11001:80"
-    networks:
-      - openim
+  # openim-web-front:
+  #   image: ${OPENIM_WEB_FRONT_IMAGE}
+  #   container_name: openim-web-front
+  #   restart: always
+  #   ports:
+  #     - "11001:80"
+  #   networks:
+  #     - openim
 
-  openim-admin-front:
-    image: ${OPENIM_ADMIN_FRONT_IMAGE}
-    container_name: openim-admin-front
-    restart: always
-    ports:
-      - "11002:80"
-    networks:
-      - openim
+  # openim-admin-front:
+  #   image: ${OPENIM_ADMIN_FRONT_IMAGE}
+  #   container_name: openim-admin-front
+  #   restart: always
+  #   ports:
+  #     - "11002:80"
+  #   networks:
+  #     - openim
 
   prometheus:
     image: ${PROMETHEUS_IMAGE}
